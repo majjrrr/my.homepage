@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MLP LAB · 调参实验室</title>
+<meta name="description" content="用调参小游戏理解多层感知机：学习率、隐藏层、激活函数、优化器如何影响训练。">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Space+Grotesk:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* ===== 令牌 ===== */
+:root{
+  --paper:#E7ECE9;
+  --paper-2:#DDE5E1;
+  --grid:#CFDAD5;
+  --panel:#0F1C24;
+  --panel-2:#152A33;
+  --panel-3:#1B333D;
+  --line:#C7D3CE;
+  --line-dark:rgba(255,255,255,.09);
+  --ink:#122229;
+  --ink-2:#4C626A;
+  --ink-3:#7A8F95;
+  --hot:#F0633C;
+  --hot-soft:rgba(240,99,60,.14);
+  --cool:#2FB3A1;
+  --cool-soft:rgba(47,179,161,.14);
+  --warn:#E0A33A;
+  --on-dark:#EAF1EE;
+  --on-dark-2:#9FB5B4;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --disp:'Space Grotesk','Noto Sans SC',sans-serif;
+  --sans:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:var(--sans);color:var(--ink);line-height:1.7;-webkit-font-smoothing:antialiased;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:24px 24px;
+  background-attachment:fixed;
+}
+::selection{background:var(--hot);color:#fff;}
+img{max-width:100%;display:block;}
+
+.page{max-width:1340px;margin:0 auto;padding:22px 26px 46px;}
+
+/* ===== 顶栏 ===== */
+.top{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:4px 0 18px;border-bottom:1px solid var(--line);margin-bottom:20px;}
+.brand{display:flex;align-items:baseline;gap:10px;}
+.brand .logo{font-family:var(--disp);font-weight:700;font-size:24px;letter-spacing:.04em;color:var(--ink);}
+.brand .logo i{font-style:normal;color:var(--hot);}
+.brand .sub{font-size:12px;color:var(--ink-3);letter-spacing:.16em;font-family:var(--mono);}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:16px;}
+.level-tabs{display:flex;gap:8px;flex-wrap:wrap;}
+.lv{display:flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:#F4F7F4;cursor:pointer;font-size:13px;color:var(--ink-2);transition:.2s;min-height:38px;}
+.lv:hover{border-color:var(--hot);color:var(--ink);}
+.lv.on{background:var(--ink);color:#F2F6F3;border-color:var(--ink);}
+.lv .stars{font-size:11px;letter-spacing:1px;color:var(--warn);}
+.lv.on .stars{color:#F7C873;}
+.score{font-family:var(--mono);font-size:13px;color:var(--ink-2);display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.score svg{color:var(--warn);}
+
+/* ===== 主网格 ===== */
+.lab-grid{display:grid;grid-template-columns:minmax(0,1.55fr) 336px 336px;gap:18px;align-items:start;}
+.panel{background:var(--panel);border-radius:16px;padding:16px;color:var(--on-dark);box-shadow:0 18px 40px rgba(18,34,41,.16);border:1px solid rgba(0,0,0,.25);}
+.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+.panel-head h2{font-size:14px;font-weight:500;color:var(--on-dark);letter-spacing:.04em;}
+.panel-head .tag{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--cool);border:1px solid rgba(47,179,161,.35);padding:2px 8px;border-radius:999px;}
+.panel-head .right{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--on-dark-2);}
+
+/* 画布区 */
+.board-wrap{position:relative;border-radius:12px;overflow:hidden;background:#0B161C;}
+#board{width:100%;aspect-ratio:1/1;display:block;}
+.board-hud{position:absolute;left:12px;top:10px;display:flex;gap:8px;pointer-events:none;}
+.hud-chip{font-family:var(--mono);font-size:11px;background:rgba(10,22,28,.72);color:#CFE0DB;padding:3px 9px;border-radius:6px;border:1px solid rgba(255,255,255,.10);backdrop-filter:blur(4px);}
+.hud-chip.hot{color:#F7B199;border-color:rgba(240,99,60,.4);}
+.legend{display:flex;gap:16px;margin-top:10px;font-size:11.5px;color:var(--on-dark-2);align-items:center;flex-wrap:wrap;}
+.legend span{display:flex;align-items:center;gap:6px;}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+.dot.a{background:var(--cool);}
+.dot.b{background:var(--hot);}
+.legend .note{margin-left:auto;}
+
+/* ===== 控制台 ===== */
+.ctls{display:flex;flex-direction:column;gap:12px;}
+.ctl{background:rgba(255,255,255,.035);border:1px solid var(--line-dark);border-radius:10px;padding:10px 12px;}
+.ctl-top{display:flex;align-items:center;gap:8px;}
+.ctl-top label{font-size:12.5px;color:var(--on-dark);}
+.ctl-top .hint{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cool);}
+.ctl .tip{font-size:10.5px;color:#7E9698;margin-top:2px;}
+.ctl input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;margin-top:10px;
+  background:linear-gradient(90deg,var(--cool) 0%,var(--cool) var(--fill,35%),rgba(255,255,255,.14) var(--fill,35%),rgba(255,255,255,.14) 100%);
+  outline:none;
+}
+.ctl input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:16px;height:16px;border-radius:50%;
+  background:var(--cool);border:2px solid #EAF1EE;cursor:pointer;
+  box-shadow:0 0 0 3px rgba(47,179,161,.22);
+}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+select{
+  width:100%;margin-top:8px;background:var(--panel-3);color:var(--on-dark);
+  border:1px solid var(--line-dark);border-radius:8px;padding:8px 10px;font-size:12.5px;font-family:var(--sans);
+  outline:none;cursor:pointer;-webkit-appearance:none;appearance:none;
+  background-image:linear-gradient(45deg,transparent 50%,#7E9698 50%),linear-gradient(135deg,#7E9698 50%,transparent 50%);
+  background-position:calc(100% - 16px) 52%,calc(100% - 11px) 52%;
+  background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+}
+
+.btns{display:grid;grid-template-columns:1.7fr 1fr;gap:10px;margin-top:4px;}
+.btn{
+  border:none;border-radius:10px;padding:12px 14px;font-size:13.5px;font-weight:500;cursor:pointer;
+  font-family:var(--sans);transition:.18s;min-height:46px;
+}
+.btn.primary{background:var(--hot);color:#fff;box-shadow:0 6px 18px rgba(240,99,60,.32);}
+.btn.primary:hover{background:#E3542D;}
+.btn.primary.paused{background:var(--cool);box-shadow:0 6px 18px rgba(47,179,161,.28);}
+.btn.ghost{background:transparent;color:var(--on-dark-2);border:1px solid var(--line-dark);}
+.btn.ghost:hover{color:var(--on-dark);border-color:rgba(255,255,255,.28);}
+
+.speeds{display:flex;gap:6px;margin-top:10px;align-items:center;}
+.speeds span{font-size:11px;color:#7E9698;font-family:var(--mono);margin-right:2px;}
+.sp{flex:1;border:1px solid var(--line-dark);background:transparent;color:var(--on-dark-2);border-radius:7px;padding:6px;font-size:11.5px;font-family:var(--mono);cursor:pointer;transition:.15s;}
+.sp.on{background:var(--panel-3);color:var(--cool);border-color:rgba(47,179,161,.45);}
+
+.readouts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;}
+.ro{background:rgba(255,255,255,.035);border:1px solid var(--line-dark);border-radius:9px;padding:8px 10px;text-align:center;}
+.ro b{display:block;font-family:var(--mono);font-size:17px;color:var(--on-dark);line-height:1.3;}
+.ro span{font-size:10px;color:#7E9698;letter-spacing:.06em;}
+.ro b.loss{color:#F7B199;}
+.ro b.acc{color:#8FE0D3;}
+
+/* ===== 示波器 ===== */
+#chart{width:100%;aspect-ratio:16/9;display:block;border-radius:10px;background:#0A161B;}
+.chart-legend{display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--on-dark-2);}
+.chart-legend span{display:flex;align-items:center;gap:6px;}
+.line{width:14px;height:2px;border-radius:1px;display:inline-block;}
+
+.net-wrap{margin-top:14px;border-top:1px dashed var(--line-dark);padding-top:12px;}
+#net{width:100%;height:auto;display:block;}
+.net-note{font-family:var(--mono);font-size:10px;color:#6F8588;margin-top:6px;letter-spacing:.04em;}
+
+/* ===== 底栏提示 ===== */
+.hintbar{
+  margin-top:18px;background:#F4F7F4;border:1px solid var(--line);border-radius:12px;padding:12px 16px;
+  display:flex;gap:12px;align-items:flex-start;font-size:12.5px;color:var(--ink-2);
+}
+.hintbar .k{font-family:var(--mono);font-size:11px;color:var(--hot);border:1px solid rgba(240,99,60,.35);border-radius:6px;padding:2px 8px;white-space:nowrap;margin-top:1px;}
+.hintbar p{flex:1;}
+.hintbar p b{color:var(--ink);font-weight:500;}
+
+/* ===== 结算弹窗 ===== */
+.mask{position:fixed;inset:0;background:rgba(10,20,26,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:60;padding:20px;}
+.mask.show{display:flex;}
+.result{width:min(430px,92vw);background:#F7F9F7;border-radius:18px;padding:26px 26px 22px;box-shadow:0 30px 80px rgba(0,0,0,.35);}
+.result .r-tag{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--hot);}
+.result h3{font-family:var(--disp);font-weight:700;font-size:22px;margin:6px 0 4px;color:var(--ink);}
+.result .r-stars{font-size:26px;letter-spacing:6px;color:var(--warn);margin:8px 0 4px;min-height:34px;}
+.result .r-stars svg{vertical-align:-4px;}
+.result .r-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0;}
+.rm{background:#EDF2EE;border-radius:9px;padding:8px;text-align:center;}
+.rm b{display:block;font-family:var(--mono);font-size:15px;color:var(--ink);}
+.rm span{font-size:10.5px;color:var(--ink-3);}
+.result .r-hints{background:#FBF3E9;border:1px solid #EAD9BE;border-radius:10px;padding:10px 12px;font-size:12px;color:#7A5A2A;line-height:1.7;}
+.result .r-hints .dh{display:block;margin-bottom:4px;font-weight:700;font-size:11.5px;letter-spacing:.06em;color:#5A3E12;}
+.result .r-hints b{font-weight:700;color:#5A3E12;}
+.result .r-btns{display:flex;gap:10px;margin-top:16px;}
+.result .btn{flex:1;color:#fff;background:var(--ink);}
+.result .btn:hover{background:#22343C;}
+.result .btn.line2{background:transparent;color:var(--ink-2);border:1px solid var(--line);}
+
+@media (max-width:1120px){
+  .lab-grid{grid-template-columns:1fr;max-width:640px;margin:0 auto;}
+  .page{padding:18px 16px 36px;}
+  .top-right{width:100%;margin-left:0;}
+  .score{margin-left:auto;}
+}
+@media (max-width:520px){
+  .brand .logo{font-size:20px;}
+  .lv{padding:6px 10px;font-size:12px;}
+  .row2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ===== 顶栏 ===== -->
+  <header class="top">
+    <div class="brand">
+      <span class="logo">MLP<i>·</i>LAB</span>
+      <span class="sub">调参实验室</span>
+    </div>
+    <div class="top-right">
+      <div class="level-tabs" id="levelTabs"></div>
+      <div class="score">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5L2.6 9.4l6.5-.9z"/></svg>
+        <span id="starCount">0</span>/12
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== 主区 ===== -->
+  <div class="lab-grid">
+
+    <!-- 数据画布 -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2 id="levelTitle">训练场</h2>
+        <span class="tag">DATA + DECISION</span>
+        <span class="right" id="goalLabel">—</span>
+      </div>
+      <div class="board-wrap">
+        <canvas id="board" width="640" height="640"></canvas>
+        <div class="board-hud">
+          <span class="hud-chip" id="hudStep">STEP 0</span>
+          <span class="hud-chip hot" id="hudAcc">ACC —</span>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i class="dot a"></i>类别 A</span>
+        <span><i class="dot b"></i>类别 B</span>
+        <span><i class="dot" style="background:rgba(47,179,161,.35);width:14px;height:14px;border-radius:4px;"></i>预测区域</span>
+        <span class="note" id="levelNote">—</span>
+      </div>
+    </section>
+
+    <!-- 控制台 -->
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>参数控制台</h2>
+        <span class="tag">HYPERPARAMS</span>
+      </div>
+      <div class="ctls">
+
+        <div class="ctl">
+          <div class="ctl-top"><label for="pLr">学习率 η</label><span class="hint" id="vLr">0.050</span></div>
+          <div class="tip">步子大小：太大震荡，太小走不动</div>
+          <input type="range" id="pLr" min="0" max="100" value="55" step="1">
+        </div>
+
+        <div class="row2">
+          <div class="ctl">
+            <div class="ctl-top"><label for="pW">隐藏宽度</label><span class="hint" id="vW">6</span></div>
+            <div class="tip">每层神经元数量</div>
+            <input type="range" id="pW" min="2" max="12" value="6" step="1">
+          </div>
+          <div class="ctl">
+            <div class="ctl-top"><label for="pD">隐藏层数</label><span class="hint" id="vD">1</span></div>
+            <div class="tip">越深越能表达复杂边界</div>
+            <input type="range" id="pD" min="1" max="3" value="1" step="1">
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="ctl">
+            <div class="ctl-top"><label for="pAct">激活函数</label></div>
+            <select id="pAct">
+              <option value="relu">ReLU</option>
+              <option value="tanh">tanh</option>
+              <option value="sigmoid">sigmoid</option>
+            </select>
+          </div>
+          <div class="ctl">
+            <div class="ctl-top"><label for="pOpt">优化器</label></div>
+            <select id="pOpt">
+              <option value="adam">Adam</option>
+              <option value="momentum">Momentum</option>
+              <option value="sgd">SGD</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row2">
+          <div class="ctl">
+            <div class="ctl-top"><label for="pBatch">批大小</label></div>
+            <select id="pBatch">
+              <option value="8">8</option>
+              <option value="16">16</option>
+              <option value="32" selected>32</option>
+              <option value="64">64</option>
+            </select>
+          </div>
+          <div class="ctl">
+            <div class="ctl-top"><label for="pL2">L2 正则</label><span class="hint" id="vL2">0.001</span></div>
+            <div class="tip">抑制权重过大</div>
+            <input type="range" id="pL2" min="0" max="100" value="1" step="1">
+          </div>
+        </div>
+
+        <div class="btns">
+          <button class="btn primary" id="runBtn">开始训练</button>
+          <button class="btn ghost" id="resetBtn">重置</button>
+        </div>
+
+        <div class="speeds">
+          <span>速度</span>
+          <button class="sp" data-speed="2">1×</button>
+          <button class="sp on" data-speed="8">4×</button>
+          <button class="sp" data-speed="24">12×</button>
+          <button class="sp" data-speed="64">快进</button>
+        </div>
+
+        <div class="readouts">
+          <div class="ro"><b id="roStep">0</b><span>STEP</span></div>
+          <div class="ro"><b class="loss" id="roLoss">0.693</b><span>LOSS</span></div>
+          <div class="ro"><b class="acc" id="roAcc">—</b><span>ACC</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 示波器 + 网络 -->
+    <aside class="panel">
+      <div class="panel-head">
+        <h2>训练示波器</h2>
+        <span class="tag">SCOPE</span>
+      </div>
+      <canvas id="chart" width="640" height="360"></canvas>
+      <div class="chart-legend">
+        <span><i class="line" style="background:var(--cool);"></i>Loss</span>
+        <span><i class="line" style="background:var(--hot);"></i>Accuracy</span>
+        <span style="margin-left:auto;font-family:var(--mono);">budget <b id="vBudget">1500</b></span>
+      </div>
+      <div class="net-wrap">
+        <div class="panel-head" style="margin-bottom:8px;">
+          <h2>网络结构</h2>
+          <span class="tag">WEIGHTS</span>
+        </div>
+        <svg id="net" viewBox="0 0 340 190" role="img" aria-label="网络结构图"></svg>
+        <div class="net-note">连线粗细 = 权重绝对值 · 橙正 / 青负 · 节点亮度 = 激活值</div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- ===== 提示条 ===== -->
+  <div class="hintbar">
+    <span class="k">怎么玩</span>
+    <p id="playHint">调整右侧参数，点「开始训练」，让决策边界把两类点分开。达到目标准确率即可过关，用得越少步数星星越多。<b>参数越离谱，越容易看到「翻车」现场</b>——这本身就是学习的一部分。</p>
+  </div>
+</div>
+
+<!-- ===== 结算弹窗 ===== -->
+<div class="mask" id="mask">
+  <div class="result">
+    <div class="r-tag" id="rTag">RESULT</div>
+    <h3 id="rTitle">训练完成</h3>
+    <div class="r-stars" id="rStars"></div>
+    <div class="r-metrics">
+      <div class="rm"><b id="rAcc">—</b><span>测试准确率</span></div>
+      <div class="rm"><b id="rStep">—</b><span>训练步数</span></div>
+      <div class="rm"><b id="rParam">—</b><span>隐藏层</span></div>
+    </div>
+    <div class="r-hints" id="rHints"></div>
+    <div class="r-btns">
+      <button class="btn" id="rAgain">再试一次</button>
+      <button class="btn line2" id="rNext">下一关</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 基础工具 ================= */
+function makeRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function randnR(rng){
+  let u = 0, v = 0;
+  while(u === 0) u = rng();
+  while(v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+const clamp = (x,a,b)=>Math.max(a,Math.min(b,x));
+const lerp = (a,b,t)=>a+(b-a)*t;
+
+/* ================= 数据集 ================= */
+const LEVELS = [
+  {id:'xor',   name:'异或 XOR',   target:0.95, budget:400, note:'线性不可分：没有隐藏层必翻车'},
+  {id:'circle',name:'同心圆',     target:0.96, budget:450, note:'径向边界：宽度不够会欠拟合'},
+  {id:'moons', name:'双月',       target:0.95, budget:650, note:'弯月交错：容量与学习率要配合'},
+  {id:'spiral',name:'双螺旋',     target:0.92, budget:900, note:'最难的边界：深度、宽度、优化器一起上'}
+];
+
+function genPoints(kind, n, seed){
+  const rng = makeRng(seed);
+  const pts = [];
+  if(kind === 'xor'){
+    const centers = [[-0.55,-0.55,0],[0.55,0.55,0],[-0.55,0.55,1],[0.55,-0.55,1]];
+    for(let i=0;i<n;i++){
+      const c = centers[i % 4];
+      pts.push({x: c[0] + randnR(rng) * 0.17,
+                y: c[1] + randnR(rng) * 0.17,
+                label: c[2]});
+    }
+  } else if(kind === 'circle'){
+    for(let i=0;i<n;i++){
+      const cls = i % 2;
+      const r = cls === 1 ? 0.64 + rng() * 0.36 : 0.08 + rng() * 0.26;
+      const th = rng() * Math.PI * 2;
+      pts.push({x: Math.cos(th) * r + randnR(rng) * 0.03,
+                y: Math.sin(th) * r + randnR(rng) * 0.03,
+                label: cls});
+    }
+  } else if(kind === 'moons'){
+    for(let i=0;i<n;i++){
+      const cls = i % 2;
+      const t = rng() * Math.PI;
+      let x, y;
+      if(cls === 0){ x = Math.cos(t); y = Math.sin(t); }
+      else { x = 1 - Math.cos(t); y = 0.5 - Math.sin(t); }
+      pts.push({x: (x - 0.5) * 1.25 + randnR(rng) * 0.08,
+                y: (y - 0.5) * 1.25 + randnR(rng) * 0.08,
+                label: cls});
+    }
+  } else if(kind === 'spiral'){
+    for(let i=0;i<n;i++){
+      const cls = i % 2;
+      const t = (Math.floor(i / 2) / (n / 2)) * 1.0;
+      const r = 0.06 + t * 0.94;
+      const th = t * 3.1 * Math.PI + cls * Math.PI;
+      pts.push({x: r * Math.cos(th) + randnR(rng) * 0.035,
+                y: r * Math.sin(th) + randnR(rng) * 0.035,
+                label: cls});
+    }
+  }
+  return pts;
+}
+
+/* ================= MLP ================= */
+function actFn(name, z){
+  if(name === 'relu') return z > 0 ? z : 0;
+  if(name === 'tanh') return Math.tanh(z);
+  return 1 / (1 + Math.exp(-clamp(z, -30, 30)));
+}
+function actDeriv(name, z, a){
+  if(name === 'relu') return z > 0 ? 1 : 0;
+  if(name === 'tanh') return 1 - a * a;
+  return a * (1 - a);
+}
+
+class MLP{
+  constructor(sizes, opts){
+    this.sizes = sizes;
+    this.act = opts.act;
+    this.opt = opts.opt;
+    this.l2 = opts.l2;
+    this.layers = [];
+    const init = opts.init || 'xavier';
+    for(let l=0;l<sizes.length-1;l++){
+      const nin = sizes[l], nout = sizes[l+1];
+      const scale = init === 'xavier'
+        ? Math.sqrt(2/(nin+nout))
+        : Math.sqrt(2/nin);
+      const W = new Float64Array(nin * nout);
+      for(let i=0;i<W.length;i++) W[i] = randnR(Math.random) * scale;
+      this.layers.push({
+        W, b: new Float64Array(nout),
+        mW: new Float64Array(nin*nout), vW: new Float64Array(nin*nout),
+        mb: new Float64Array(nout), vb: new Float64Array(nout)
+      });
+    }
+    this.momW = this.layers.map(L => new Float64Array(L.W.length));
+    this.momB = this.layers.map(L => new Float64Array(L.b.length));
+    this.t = 0;
+  }
+  forward(x, keep){
+    const as = [[x[0], x[1]]];
+    const zs = [];
+    let a = as[0];
+    const nl = this.layers.length;
+    for(let l=0;l<nl;l++){
+      const L = this.layers[l];
+      const nin = this.sizes[l], nout = this.sizes[l+1];
+      const z = new Float64Array(nout);
+      for(let j=0;j<nout;j++){
+        let s = L.b[j];
+        const off = j * nin;
+        for(let i=0;i<nin;i++) s += L.W[off + i] * a[i];
+        z[j] = s;
+      }
+      zs.push(z);
+      if(l === nl - 1){
+        a = z;
+      } else {
+        const out = new Float64Array(nout);
+        for(let j=0;j<nout;j++) out[j] = actFn(this.act, z[j]);
+        a = out;
+      }
+      as.push(a);
+    }
+    return {logits: a, zs, as};
+  }
+  prob(x){
+    const {logits} = this.forward(x, false);
+    const m = Math.max(logits[0], logits[1]);
+    const e0 = Math.exp(logits[0]-m), e1 = Math.exp(logits[1]-m);
+    return e1 / (e0 + e1);
+  }
+  trainStep(points, batch, lr){
+    const nl = this.layers.length;
+    const gW = this.layers.map(L => new Float64Array(L.W.length));
+    const gB = this.layers.map(L => new Float64Array(L.b.length));
+    let lossSum = 0;
+    const bn = Math.min(batch, points.length);
+    for(let k=0;k<bn;k++){
+      const p = points[(Math.random()*points.length)|0];
+      const {logits, zs, as} = this.forward([p.x, p.y], true);
+      const m = Math.max(logits[0], logits[1]);
+      const e0 = Math.exp(logits[0]-m), e1 = Math.exp(logits[1]-m);
+      const p1 = e1 / (e0 + e1);
+      const t = p.label;
+      lossSum += -(t*Math.log(p1+1e-12) + (1-t)*Math.log(1-p1+1e-12));
+      let delta = new Float64Array([(1-p1)-(1-t), p1-t]);
+      for(let l=nl-1;l>=0;l--){
+        const L = this.layers[l];
+        const nin = this.sizes[l], nout = this.sizes[l+1];
+        const aPrev = as[l];
+        for(let j=0;j<nout;j++){
+          const dj = delta[j];
+          gB[l][j] += dj;
+          const off = j*nin;
+          for(let i=0;i<nin;i++) gW[l][off+i] += dj * aPrev[i];
+        }
+        if(l > 0){
+          const dPrev = new Float64Array(nin);
+          for(let i=0;i<nin;i++){
+            let v = 0;
+            for(let j=0;j<nout;j++) v += L.W[j*nin+i] * delta[j];
+            dPrev[i] = v * actDeriv(this.act, zs[l-1][i], as[l-1][i]);
+          }
+          delta = dPrev;
+        }
+      }
+    }
+    const scale = 1/bn;
+    const nextT = this.t + 1;
+    for(let l=0;l<nl;l++){
+      const L = this.layers[l];
+      for(let i=0;i<L.W.length;i++){
+        this.applyGrad(L.W, i, gW[l][i]*scale + this.l2*L.W[i], this.momW[l], L.mW, L.vW, nextT, lr);
+      }
+      for(let j=0;j<L.b.length;j++){
+        this.applyGrad(L.b, j, gB[l][j]*scale, this.momB[l], L.mb, L.vb, nextT, lr);
+      }
+    }
+    this.t = nextT;
+    return lossSum / bn;
+  }
+  applyGrad(arr, i, g, mom, m, v, t, lr){
+    if(this.opt === 'sgd'){
+      arr[i] -= lr * g;
+    } else if(this.opt === 'momentum'){
+      mom[i] = 0.9 * mom[i] - lr * g;
+      arr[i] += mom[i];
+    } else {
+      m[i] = 0.9*m[i] + 0.1*g;
+      v[i] = 0.999*v[i] + 0.001*g*g;
+      const mh = m[i] / (1 - Math.pow(0.9, t));
+      const vh = v[i] / (1 - Math.pow(0.999, t));
+      arr[i] -= lr * mh / (Math.sqrt(vh) + 1e-8);
+    }
+  }
+}
+
+/* ================= 游戏状态 ================= */
+const S = {
+  level: 0,
+  status: 'idle',          // idle | training | paused | done
+  step: 0,
+  loss: 0.693,
+  acc: 0,
+  speed: 8,
+  model: null,
+  trainPts: [],
+  testPts: [],
+  lossHist: [],
+  accHist: [],
+  stars: {},               // levelId -> best stars
+  lastLosses: [],
+  accHistory: []
+};
+
+const P = {
+  lr: 0.03,
+  width: 6,
+  depth: 1,
+  act: 'relu',
+  opt: 'adam',
+  batch: 32,
+  l2: 0.001
+};
+
+/* 星数本地存储 */
+function loadStars(){
+  try{
+    const raw = localStorage.getItem('mlp-lab-stars');
+    if(raw) S.stars = JSON.parse(raw);
+  }catch(e){ S.stars = {}; }
+}
+function saveStars(){
+  try{ localStorage.setItem('mlp-lab-stars', JSON.stringify(S.stars)); }catch(e){}
+}
+
+/* ================= DOM ================= */
+const board = document.getElementById('board');
+const bctx = board.getContext('2d');
+const chart = document.getElementById('chart');
+const cctx = chart.getContext('2d');
+const netSvg = document.getElementById('net');
+
+const el = id => document.getElementById(id);
+
+/* ================= 画布渲染 ================= */
+const GRID = 64;
+const WORLD = 1.32;
+const offCanvas = document.createElement('canvas');
+offCanvas.width = GRID; offCanvas.height = GRID;
+const offCtx = offCanvas.getContext('2d');
+const offImg = offCtx.createImageData(GRID, GRID);
+
+function drawBoard(){
+  const w = board.width, h = board.height;
+  bctx.clearRect(0, 0, w, h);
+  /* 背景 */
+  bctx.fillStyle = '#0B161C';
+  bctx.fillRect(0, 0, w, h);
+
+  /* 决策边界 */
+  if(S.model){
+    const data = offImg.data;
+    const N = GRID;
+    for(let gy=0; gy<N; gy++){
+      for(let gx=0; gx<N; gx++){
+        const wx = (gx + 0.5) / N * 2 * WORLD - WORLD;
+        const wy = -( (gy + 0.5) / N * 2 * WORLD - WORLD );
+        const p = S.model.prob([wx, wy]);
+        const idx = (gy * N + gx) * 4;
+        /* 青 → 橙 混合 */
+        data[idx]   = Math.round(lerp(47, 240, p));
+        data[idx+1] = Math.round(lerp(179, 99, p));
+        data[idx+2] = Math.round(lerp(161, 60, p));
+        data[idx+3] = 142;
+      }
+    }
+    offCtx.putImageData(offImg, 0, 0);
+    bctx.imageSmoothingEnabled = true;
+    bctx.drawImage(offCanvas, 0, 0, w, h);
+  }
+
+  /* 网格线 */
+  bctx.strokeStyle = 'rgba(255,255,255,.06)';
+  bctx.lineWidth = 1;
+  for(let i=1;i<8;i++){
+    const p = i / 8 * w;
+    bctx.beginPath(); bctx.moveTo(p, 0); bctx.lineTo(p, h); bctx.stroke();
+    bctx.beginPath(); bctx.moveTo(0, p); bctx.lineTo(w, p); bctx.stroke();
+  }
+
+  /* 数据点 */
+  const pts = S.trainPts;
+  for(let i=0;i<pts.length;i++){
+    const p = pts[i];
+    const px = (p.x + WORLD) / (2*WORLD) * w;
+    const py = (WORLD - p.y) / (2*WORLD) * h;
+    bctx.beginPath();
+    bctx.arc(px, py, 3.4, 0, Math.PI*2);
+    bctx.fillStyle = p.label === 1 ? 'rgba(240,99,60,.95)' : 'rgba(47,179,161,.95)';
+    bctx.fill();
+    bctx.strokeStyle = 'rgba(255,255,255,.55)';
+    bctx.lineWidth = 1;
+    bctx.stroke();
+  }
+}
+
+/* ================= 示波器 ================= */
+function drawChart(){
+  const w = chart.width, h = chart.height;
+  cctx.clearRect(0, 0, w, h);
+  cctx.fillStyle = '#0A161B';
+  cctx.fillRect(0, 0, w, h);
+
+  /* 网格 */
+  cctx.strokeStyle = 'rgba(255,255,255,.055)';
+  cctx.lineWidth = 1;
+  for(let i=1;i<5;i++){
+    const y = i/5*h;
+    cctx.beginPath(); cctx.moveTo(0,y); cctx.lineTo(w,y); cctx.stroke();
+  }
+  for(let i=1;i<8;i++){
+    const x = i/8*w;
+    cctx.beginPath(); cctx.moveTo(x,0); cctx.lineTo(x,h); cctx.stroke();
+  }
+
+  const hist = S.lossHist;
+  if(hist.length < 2) return;
+
+  const pad = 14;
+  const plotW = w - pad*2, plotH = h - pad*2;
+  const n = hist.length;
+
+  /* loss 曲线：0 ~ 0.75 */
+  cctx.beginPath();
+  for(let i=0;i<n;i++){
+    const x = pad + (i/(n-1)) * plotW;
+    const v = clamp(hist[i], 0, 0.75);
+    const y = pad + plotH - (v/0.75) * plotH;
+    if(i===0) cctx.moveTo(x,y); else cctx.lineTo(x,y);
+  }
+  cctx.strokeStyle = '#2FB3A1';
+  cctx.lineWidth = 2.4;
+  cctx.shadowColor = 'rgba(47,179,161,.55)';
+  cctx.shadowBlur = 8;
+  cctx.stroke();
+  cctx.shadowBlur = 0;
+
+  /* accuracy 曲线：0 ~ 1 */
+  const accs = S.accHist;
+  if(accs.length >= 2){
+    cctx.beginPath();
+    for(let i=0;i<accs.length;i++){
+      const x = pad + (i/(accs.length-1)) * plotW;
+      const y = pad + plotH - clamp(accs[i],0,1) * plotH;
+      if(i===0) cctx.moveTo(x,y); else cctx.lineTo(x,y);
+    }
+    cctx.strokeStyle = '#F0633C';
+    cctx.lineWidth = 2;
+    cctx.shadowColor = 'rgba(240,99,60,.5)';
+    cctx.shadowBlur = 6;
+    cctx.stroke();
+    cctx.shadowBlur = 0;
+  }
+
+  /* 扫描点 */
+  if(hist.length){
+    const x = pad + plotW;
+    const y = pad + plotH - clamp(hist[n-1],0,0.75)/0.75*plotH;
+    cctx.beginPath();
+    cctx.arc(x, y, 4, 0, Math.PI*2);
+    cctx.fillStyle = '#2FB3A1';
+    cctx.fill();
+  }
+}
+
+/* ================= 网络结构图 ================= */
+function drawNet(){
+  const sizes = S.model ? S.model.sizes : [2, P.width, P.width, 2];
+  const w = 340, h = 190;
+  const padX = 38, padY = 18;
+  const nl = sizes.length;
+  const colX = i => nl === 1 ? w/2 : padX + i * (w - padX*2) / (nl - 1);
+
+  const nodePos = [];
+  for(let l=0;l<nl;l++){
+    const n = sizes[l];
+    const xs = colX(l);
+    const ys = [];
+    for(let i=0;i<n;i++){
+      const t = n === 1 ? 0.5 : i/(n-1);
+      ys.push({x: xs, y: padY + t * (h - padY*2)});
+    }
+    nodePos.push(ys);
+  }
+
+  /* 计算抽样连线 */
+  let svg = '';
+  const maxPerPair = 90;
+  for(let l=0;l<nl-1;l++){
+    const L = S.model ? S.model.layers[l] : null;
+    const nin = sizes[l], nout = sizes[l+1];
+    const entries = [];
+    if(L){
+      for(let j=0;j<nout;j++){
+        for(let i=0;i<nin;i++){
+          entries.push({i, j, w: L.W[j*nin+i]});
+        }
+      }
+      entries.sort((a,b)=>Math.abs(b.w)-Math.abs(a.w));
+    } else {
+      for(let j=0;j<Math.min(nout,8);j++) for(let i=0;i<Math.min(nin,8);i++) entries.push({i,j,w:0.2});
+    }
+    const keep = entries.slice(0, maxPerPair);
+    for(const e of keep){
+      const a = nodePos[l][e.i], b = nodePos[l+1][e.j];
+      const mag = Math.min(Math.abs(e.w), 1.2);
+      const op = 0.14 + mag * 0.6;
+      const col = e.w >= 0 ? `rgba(240,99,60,${op})` : `rgba(47,179,161,${op})`;
+      const sw = (0.5 + mag * 1.7).toFixed(2);
+      svg += `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${col}" stroke-width="${sw}"/>`;
+    }
+  }
+
+  /* 节点 */
+  const actVals = lastActivations();
+  for(let l=0;l<nl;l++){
+    const isOut = l === nl-1;
+    for(let i=0;i<nodePos[l].length;i++){
+      const p = nodePos[l][i];
+      const r = isOut ? 6 : 4.4;
+      let fill;
+      if(isOut){
+        fill = i === 1 ? '#F0633C' : '#2FB3A1';
+      } else {
+        const v = actVals[l] ? actVals[l][i] : 0;
+        const k = clamp(Math.abs(v), 0, 1);
+        fill = `rgba(216,236,230,${0.22 + k*0.7})`;
+      }
+      svg += `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="rgba(10,22,27,.8)" stroke-width="1"/>`;
+    }
+  }
+
+  /* 层级标签 */
+  svg += `<text x="${padX}" y="${h-2}" fill="#6F8588" font-size="8" font-family="monospace">IN</text>`;
+  for(let l=1;l<nl-1;l++){
+    svg += `<text x="${colX(l)-6}" y="${h-2}" fill="#6F8588" font-size="8" font-family="monospace">H${l}</text>`;
+  }
+  svg += `<text x="${w-42}" y="${h-2}" fill="#F0633C" font-size="8" font-family="monospace">OUT</text>`;
+
+  netSvg.innerHTML = svg;
+}
+
+let _lastActs = null;
+function lastActivations(){
+  if(!_lastActs || !S.model) return null;
+  return _lastActs;
+}
+function sampleActivations(){
+  if(!S.model || !S.trainPts.length) return;
+  const p = S.trainPts[(Math.random()*S.trainPts.length)|0];
+  const res = S.model.forward([p.x, p.y], false);
+  _lastActs = res.as;
+}
+
+/* ================= 评估 ================= */
+function evaluate(){
+  if(!S.model) return {acc:0, loss:0.693};
+  let ok = 0;
+  for(const p of S.testPts){
+    const pr = S.model.prob([p.x, p.y]);
+    if((pr > 0.5 ? 1 : 0) === p.label) ok++;
+  }
+  return {acc: ok / S.testPts.length, loss: S.loss};
+}
+
+/* ================= 关卡 ================= */
+function currentLevel(){ return LEVELS[S.level]; }
+
+function buildModel(){
+  const sizes = [2];
+  for(let i=0;i<P.depth;i++) sizes.push(P.width);
+  sizes.push(2);
+  S.model = new MLP(sizes, {act: P.act, opt: P.opt, l2: P.l2, init: 'xavier'});
+  S.step = 0;
+  S.loss = 0.693;
+  S.acc = 0;
+  S.lossHist = [0.693];
+  S.accHist = [0.5];
+  _lastActs = null;
+  sampleActivations();
+}
+
+function loadLevel(idx){
+  S.level = idx;
+  const lv = currentLevel();
+  S.trainPts = genPoints(lv.id, 260, idx * 1000 + 7);
+  S.testPts = genPoints(lv.id, 420, idx * 1000 + 999);
+  S.status = 'idle';
+  buildModel();
+  renderTabs();
+  updateUI();
+  drawBoard();
+  drawChart();
+  drawNet();
+}
+
+/* ================= UI 更新 ================= */
+function renderTabs(){
+  const wrap = el('levelTabs');
+  wrap.innerHTML = '';
+  LEVELS.forEach((lv, i) => {
+    const div = document.createElement('div');
+    div.className = 'lv' + (i === S.level ? ' on' : '');
+    const stars = S.stars[lv.id] || 0;
+    let starHtml = '';
+    for(let k=0;k<3;k++){
+      starHtml += k < stars
+        ? '<svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor" style="vertical-align:-1px"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5L2.6 9.4l6.5-.9z"/></svg>'
+        : '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px;opacity:.35"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5L2.6 9.4l6.5-.9z"/></svg>';
+    }
+    div.innerHTML = `<span>${lv.name}</span><span class="stars">${starHtml}</span>`;
+    div.addEventListener('click', () => {
+      if(S.status === 'training') stopTraining();
+      loadLevel(i);
+    });
+    wrap.appendChild(div);
+  });
+
+  let total = 0, max = 0;
+  LEVELS.forEach(lv => { total += (S.stars[lv.id]||0); max += 3; });
+  el('starCount').textContent = total;
+}
+
+function updateUI(){
+  const lv = currentLevel();
+  el('levelTitle').textContent = lv.name;
+  el('goalLabel').textContent = `目标 ACC ≥ ${(lv.target*100).toFixed(0)}% · 预算 ${lv.budget} 步`;
+  el('levelNote').textContent = lv.note;
+  el('vBudget').textContent = lv.budget;
+  el('hudStep').textContent = `STEP ${S.step}`;
+  el('hudAcc').textContent = S.step > 0 ? `ACC ${(S.acc*100).toFixed(1)}%` : 'ACC —';
+  el('roStep').textContent = S.step;
+  el('roLoss').textContent = S.loss.toFixed(3);
+  el('roAcc').textContent = S.step > 0 ? (S.acc*100).toFixed(1)+'%' : '—';
+  const btn = el('runBtn');
+  if(S.status === 'training'){ btn.textContent = '暂停'; btn.classList.add('paused'); }
+  else if(S.status === 'done'){ btn.textContent = '再来一局'; btn.classList.remove('paused'); }
+  else { btn.textContent = S.step > 0 ? '继续训练' : '开始训练'; btn.classList.remove('paused'); }
+}
+
+function markParamsChanged(){
+  if(S.status === 'training') stopTraining();
+  S.status = 'idle';
+  buildModel();
+  updateUI();
+  drawBoard();
+  drawChart();
+  drawNet();
+}
+
+/* ================= 训练循环 ================= */
+let rafId = null;
+
+function tick(){
+  if(S.status !== 'training'){ rafId = null; return; }
+  const lv = currentLevel();
+  for(let k=0;k<S.speed;k++){
+    S.loss = S.model.trainStep(S.trainPts, P.batch, P.lr);
+    S.step++;
+    S.lastLosses.push(S.loss);
+    if(S.lastLosses.length > 24) S.lastLosses.shift();
+    if(S.step >= lv.budget) break;
+  }
+
+  /* 每帧最多评估一次，避免高倍速下重复采样 */
+  S.frameTick = (S.frameTick || 0) + 1;
+  const needEval = S.frameTick === 1 || S.frameTick % 2 === 0 || S.step >= lv.budget;
+  if(needEval){
+    S.acc = evaluate().acc;
+    S.lossHist.push(S.loss);
+    S.accHist.push(S.acc);
+    if(S.lossHist.length > 400){ S.lossHist.shift(); S.accHist.shift(); }
+    sampleActivations();
+    drawBoard();
+    drawChart();
+    drawNet();
+    updateUI();
+  }
+
+  if(S.step >= lv.budget){
+    finishGame();
+    rafId = null;
+    return;
+  }
+  rafId = requestAnimationFrame(tick);
+}
+
+function startTraining(){
+  if(!S.model) buildModel();
+  if(S.status === 'done'){
+    S.status = 'idle';
+    buildModel();
+  }
+  S.status = 'training';
+  updateUI();
+  if(!rafId) rafId = requestAnimationFrame(tick);
+}
+function stopTraining(){
+  if(S.status === 'training') S.status = 'paused';
+  updateUI();
+  if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
+}
+
+/* ================= 结算 ================= */
+function finishGame(){
+  const lv = currentLevel();
+  const acc = S.acc;
+  const win = acc >= lv.target;
+  S.status = 'done';
+
+  let stars = 0;
+  if(win){
+    const ratio = S.step / lv.budget;
+    stars = ratio < 0.35 ? 3 : ratio < 0.65 ? 2 : 1;
+    if(!S.stars[lv.id] || S.stars[lv.id] < stars){
+      S.stars[lv.id] = stars;
+      saveStars();
+    }
+  }
+
+  el('rTag').textContent = win ? 'MISSION PASSED' : 'MISSION FAILED';
+  el('rTitle').textContent = win ? `过关：${lv.name}` : `没达标：${lv.name}`;
+  let starsHtml = '';
+  for(let i=0;i<3;i++){
+    starsHtml += i < stars
+      ? '<svg width="26" height="26" viewBox="0 0 24 24" fill="#E0A33A"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5L2.6 9.4l6.5-.9z"/></svg>'
+      : '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#C9D2CD" stroke-width="1.5"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.5 6.2 20.5l1.1-6.5L2.6 9.4l6.5-.9z"/></svg>';
+  }
+  el('rStars').innerHTML = starsHtml;
+  el('rAcc').textContent = (acc*100).toFixed(1)+'%';
+  el('rStep').textContent = S.step;
+  el('rParam').textContent = `${P.depth}层 × ${P.width}`;
+  el('rHints').innerHTML = buildDiagnosis(win, acc, lv);
+  el('mask').classList.add('show');
+  renderTabs();
+  updateUI();
+  drawBoard();
+  drawChart();
+}
+
+function buildDiagnosis(win, acc, lv){
+  const tips = [];
+  const avgLast = S.lastLosses.length ? S.lastLosses.reduce((a,b)=>a+b,0)/S.lastLosses.length : 0;
+  const minRecent = Math.min(...S.lastLosses);
+
+  if(win){
+    tips.push(`<strong>这组参数为什么有效</strong>：${P.opt === 'adam' ? 'Adam 自适应步长，收敛稳；' : ''}${P.depth} 层 × ${P.width} 宽的容量刚好撑起这个边界，η=${P.lr.toFixed(3)} 也落在合适区间。`);
+    if(S.step/lv.budget < 0.4) tips.push('步数很省：参数组合几乎命中最优，可以试试更难的关卡。');
+    else tips.push('虽然过关，但用了较多预算：尝试降低学习率噪声、加大宽度，或换 Adam 也许更快。');
+  } else {
+    if(P.lr > 0.25) tips.push('<strong>学习率偏大</strong>：η 太大导致 loss 震荡甚至发散。先把 η 降到 0.01–0.05。');
+    if(P.lr < 0.008) tips.push('<strong>学习率偏小</strong>：步子太小，预算内走不到收敛点。把 η 调大 5–10 倍试试。');
+    if(P.depth * P.width < 10) tips.push('<strong>容量不足</strong>：隐藏层太窄/太浅，画不出这类非线性边界。加宽或加层。');
+    if(P.act === 'relu' && P.lr > 0.12) tips.push('<strong>ReLU + 大学习率</strong>：容易「神经元死亡」，换 tanh 或把 η 降到 0.02 以下。');
+    if(lv.id === 'xor' && P.depth * P.width < 8) tips.push('<strong>异或必须有隐藏层</strong>：线性模型永远学不会 XOR，至少 1 层、宽度 ≥ 4。');
+    if(lv.id === 'spiral' && P.depth < 2) tips.push('<strong>螺旋需要更深</strong>：试试 2–3 层隐藏层，配合 Adam 与 tanh。');
+    if(Math.abs(avgLast - minRecent) > 0.02 && avgLast > 0.3) tips.push('<strong>loss 在震荡</strong>：降低 η 或增大 batch，让梯度估计更稳。');
+    if(acc < 0.6 && P.l2 > 0.01) tips.push('<strong>正则过强</strong>：L2 太大压制了拟合能力，先降到 0.001 左右。');
+    if(!tips.length) tips.push('<strong>差一点点</strong>：微调学习率与宽度，多给一点预算通常就能过。');
+  }
+  return '<strong class="dh">参数诊断</strong>' + tips.map(t => `<div style="margin-top:4px">· ${t.replace(/<strong>/g,'<b>').replace(/<\/strong>/g,'</b>')}</div>`).join('');
+}
+
+/* ================= 控件绑定 ================= */
+function updateFill(input){
+  const pct = (input.value - input.min) / (input.max - input.min) * 100;
+  input.style.setProperty('--fill', pct + '%');
+}
+
+/* 学习率：0.001 ~ 0.5 对数刻度 */
+const lrFromSlider = s => Math.pow(10, -3 + (s/100)*2.699); /* 0.001 → 0.5 */
+function lrToSlider(v){ return (Math.log10(v) + 3) / 2.699 * 100; }
+
+const pLr = el('pLr');
+pLr.value = lrToSlider(P.lr);
+el('vLr').textContent = P.lr.toFixed(3);
+pLr.addEventListener('input', () => {
+  P.lr = lrFromSlider(parseFloat(pLr.value));
+  el('vLr').textContent = P.lr < 0.01 ? P.lr.toFixed(4) : P.lr.toFixed(3);
+  updateFill(pLr);
+  markParamsChanged();
+});
+
+const pW = el('pW');
+pW.addEventListener('input', () => {
+  P.width = parseInt(pW.value);
+  el('vW').textContent = P.width;
+  updateFill(pW);
+  markParamsChanged();
+});
+updateFill(pW);
+
+const pD = el('pD');
+pD.addEventListener('input', () => {
+  P.depth = parseInt(pD.value);
+  el('vD').textContent = P.depth;
+  updateFill(pD);
+  markParamsChanged();
+});
+updateFill(pD);
+
+const pL2 = el('pL2');
+pL2.addEventListener('input', () => {
+  P.l2 = parseFloat(pL2.value) / 100 * 0.05;
+  el('vL2').textContent = P.l2.toFixed(3);
+  updateFill(pL2);
+  markParamsChanged();
+});
+updateFill(pL2);
+
+el('pAct').addEventListener('change', e => { P.act = e.target.value; markParamsChanged(); });
+el('pOpt').addEventListener('change', e => { P.opt = e.target.value; markParamsChanged(); });
+el('pBatch').addEventListener('change', e => { P.batch = parseInt(e.target.value); markParamsChanged(); });
+
+el('runBtn').addEventListener('click', () => {
+  if(S.status === 'training'){ stopTraining(); }
+  else { startTraining(); }
+});
+el('resetBtn').addEventListener('click', () => {
+  stopTraining();
+  S.status = 'idle';
+  buildModel();
+  updateUI();
+  drawBoard();
+  drawChart();
+  drawNet();
+});
+
+document.querySelectorAll('.sp').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sp').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+    S.speed = parseInt(btn.dataset.speed);
+  });
+});
+
+el('rAgain').addEventListener('click', () => {
+  el('mask').classList.remove('show');
+  S.status = 'idle';
+  buildModel();
+  updateUI();
+  drawBoard();
+  drawChart();
+  drawNet();
+});
+el('rNext').addEventListener('click', () => {
+  el('mask').classList.remove('show');
+  if(S.level < LEVELS.length - 1) loadLevel(S.level + 1);
+  else { S.status = 'idle'; buildModel(); updateUI(); drawBoard(); drawChart(); drawNet(); el('rTitle').textContent = '全部通关！'; }
+});
+
+/* ================= 启动 ================= */
+loadStars();
+loadLevel(0);
+</script>
+</body>
+</html>
